@@ -21,7 +21,7 @@ import java.util.Set;
 
 /**
  * Chain Validator
- * 
+ *
  * Performs X.509 certificate chain validation using the PKIX algorithm.
  * Supports revocation checking and custom validation parameters.
  */
@@ -44,19 +44,37 @@ public class ChainValidator {
                                                         CertPathValidator certPathValidator,
                                                         CertificateFactory certificateFactory,
                                                         boolean checkRevocation) {
-        if (certificates == null || certificates.isEmpty()) {
+        if (certificates == null) {
             return CertChainVerifier.ValidationResult.failure(
-                    "Certificate chain is empty or null");
+                    "Certificate chain is null");
+        }
+        if (certificates.isEmpty()) {
+            return CertChainVerifier.ValidationResult.failure(
+                    "Certificate chain is empty");
         }
 
-        if (trustAnchors == null || trustAnchors.isEmpty()) {
+        if (trustAnchors == null) {
+            return CertChainVerifier.ValidationResult.failure(
+                    "Trust anchors cannot be null");
+        }
+        if (trustAnchors.isEmpty()) {
             return CertChainVerifier.ValidationResult.failure(
                     "No trust anchors provided");
         }
 
+        if (certPathValidator == null) {
+            return CertChainVerifier.ValidationResult.failure(
+                    "Certificate path validator cannot be null");
+        }
+
+        if (certificateFactory == null) {
+            return CertChainVerifier.ValidationResult.failure(
+                    "Certificate factory cannot be null");
+        }
+
         try {
             validateCertificateDates(certificates);
-            
+
             validateChainOrder(certificates);
 
             CertPath certPath = certificateFactory.generateCertPath(certificates);
@@ -68,10 +86,10 @@ public class ChainValidator {
             if (result instanceof PKIXCertPathValidatorResult) {
                 PKIXCertPathValidatorResult pkixResult = (PKIXCertPathValidatorResult) result;
                 TrustAnchor trustedAnchor = pkixResult.getTrustAnchor();
-                String anchorSubject = trustedAnchor.getTrustedCert() != null 
+                String anchorSubject = trustedAnchor.getTrustedCert() != null
                         ? trustedAnchor.getTrustedCert().getSubjectX500Principal().getName()
                         : trustedAnchor.getCA().toString();
-                
+
                 return CertChainVerifier.ValidationResult.success(
                         "Certificate chain is valid. Trusted anchor: " + anchorSubject);
             }
@@ -96,20 +114,34 @@ public class ChainValidator {
      * @param certificates the certificates to check
      * @throws CertificateException if any certificate is expired or not yet valid
      */
-    private void validateCertificateDates(List<X509Certificate> certificates) 
+    private void validateCertificateDates(List<X509Certificate> certificates)
             throws CertificateException {
+        if (certificates == null) {
+            throw new CertificateException("Certificate list cannot be null");
+        }
+
         Date now = new Date();
-        
+
         for (int i = 0; i < certificates.size(); i++) {
             X509Certificate cert = certificates.get(i);
+            if (cert == null) {
+                throw new CertificateException("Certificate at index " + i + " is null");
+            }
             Date notBefore = cert.getNotBefore();
             Date notAfter = cert.getNotAfter();
-            
+
+            if (notBefore == null) {
+                throw new CertificateException("Certificate " + i + " has no validity start date");
+            }
+            if (notAfter == null) {
+                throw new CertificateException("Certificate " + i + " has no validity end date");
+            }
+
             if (now.before(notBefore)) {
                 throw new CertificateException(String.format(
                         "Certificate %d is not yet valid. Valid from: %s", i, notBefore));
             }
-            
+
             if (now.after(notAfter)) {
                 throw new CertificateException(String.format(
                         "Certificate %d has expired. Expired on: %s", i, notAfter));
@@ -124,12 +156,23 @@ public class ChainValidator {
      * @param certificates the certificate chain
      * @throws CertificateException if the chain order is invalid
      */
-    private void validateChainOrder(List<X509Certificate> certificates) 
+    private void validateChainOrder(List<X509Certificate> certificates)
             throws CertificateException {
+        if (certificates == null) {
+            throw new CertificateException("Certificate list cannot be null");
+        }
+
         for (int i = 0; i < certificates.size() - 1; i++) {
             X509Certificate current = certificates.get(i);
             X509Certificate next = certificates.get(i + 1);
-            
+
+            if (current == null) {
+                throw new CertificateException("Certificate at index " + i + " is null");
+            }
+            if (next == null) {
+                throw new CertificateException("Certificate at index " + (i + 1) + " is null");
+            }
+
             if (!current.getIssuerX500Principal().equals(
                     next.getSubjectX500Principal())) {
                 throw new CertificateException(String.format(
@@ -147,16 +190,20 @@ public class ChainValidator {
      * @return configured PKIX parameters
      * @throws InvalidAlgorithmParameterException if parameters are invalid
      */
-    private PKIXParameters createPKIXParameters(Set<TrustAnchor> trustAnchors, 
-                                               boolean checkRevocation) 
+    private PKIXParameters createPKIXParameters(Set<TrustAnchor> trustAnchors,
+                                               boolean checkRevocation)
             throws InvalidAlgorithmParameterException {
+        if (trustAnchors == null) {
+            throw new InvalidAlgorithmParameterException("Trust anchors cannot be null");
+        }
+
         PKIXParameters params = new PKIXParameters(trustAnchors);
-        
+
         params.setRevocationEnabled(checkRevocation);
-        
+
         if (checkRevocation) {
             try {
-                PKIXRevocationChecker revocationChecker = 
+                PKIXRevocationChecker revocationChecker =
                         (PKIXRevocationChecker) CertPathValidator.getInstance(PKIX_ALGORITHM)
                                 .getRevocationChecker();
                 revocationChecker.setOptions(Collections.singleton(
@@ -166,9 +213,9 @@ public class ChainValidator {
                 System.out.println("Warning: Could not configure revocation checker: " + e.getMessage());
             }
         }
-        
+
         params.setExplicitPolicyRequired(false);
-        
+
         return params;
     }
 
@@ -181,29 +228,31 @@ public class ChainValidator {
      */
     private CertChainVerifier.ValidationResult handleValidationException(
             CertPathValidatorException e, List<X509Certificate> certificates) {
-        
+
         String reason = e.getReason();
         int index = e.getIndex();
-        
+
         StringBuilder errorMessage = new StringBuilder();
         errorMessage.append("Certificate validation failed: ").append(reason);
-        
-        if (index >= 0 && index < certificates.size()) {
+
+        if (index >= 0 && certificates != null && index < certificates.size()) {
             X509Certificate failedCert = certificates.get(index);
-            errorMessage.append("\nFailed at certificate index: ").append(index);
-            errorMessage.append("\nSubject: ").append(
-                    failedCert.getSubjectX500Principal().getName());
-            errorMessage.append("\nIssuer: ").append(
-                    failedCert.getIssuerX500Principal().getName());
-            errorMessage.append("\nSerial: ").append(
-                    failedCert.getSerialNumber().toString(16).toUpperCase());
+            if (failedCert != null) {
+                errorMessage.append("\nFailed at certificate index: ").append(index);
+                errorMessage.append("\nSubject: ").append(
+                        failedCert.getSubjectX500Principal().getName());
+                errorMessage.append("\nIssuer: ").append(
+                        failedCert.getIssuerX500Principal().getName());
+                errorMessage.append("\nSerial: ").append(
+                        failedCert.getSerialNumber().toString(16).toUpperCase());
+            }
         }
-        
+
         Throwable cause = e.getCause();
         if (cause != null) {
             errorMessage.append("\nCause: ").append(cause.getMessage());
         }
-        
+
         return CertChainVerifier.ValidationResult.failure(errorMessage.toString());
     }
 
@@ -216,18 +265,22 @@ public class ChainValidator {
      */
     public CertChainVerifier.ValidationResult validateBasicChain(
             List<X509Certificate> certificates) {
-        if (certificates == null || certificates.isEmpty()) {
+        if (certificates == null) {
             return CertChainVerifier.ValidationResult.failure(
-                    "Certificate chain is empty or null");
+                    "Certificate chain is null");
+        }
+        if (certificates.isEmpty()) {
+            return CertChainVerifier.ValidationResult.failure(
+                    "Certificate chain is empty");
         }
 
         try {
             validateCertificateDates(certificates);
             validateChainOrder(certificates);
-            
+
             X509Certificate endEntity = certificates.get(0);
             X509Certificate root = certificates.get(certificates.size() - 1);
-            
+
             StringBuilder message = new StringBuilder();
             message.append("Basic chain validation passed. ");
             message.append("Chain length: ").append(certificates.size());
@@ -235,9 +288,9 @@ public class ChainValidator {
                     endEntity.getSubjectX500Principal().getName());
             message.append(", Root: ").append(
                     root.getSubjectX500Principal().getName());
-            
+
             return CertChainVerifier.ValidationResult.success(message.toString());
-            
+
         } catch (CertificateException e) {
             return CertChainVerifier.ValidationResult.failure(e.getMessage());
         }
@@ -250,6 +303,9 @@ public class ChainValidator {
      * @return true if the certificate is self-signed
      */
     public boolean isSelfSigned(X509Certificate certificate) {
+        if (certificate == null) {
+            return false;
+        }
         return certificate.getSubjectX500Principal().equals(
                 certificate.getIssuerX500Principal());
     }
@@ -264,13 +320,13 @@ public class ChainValidator {
         if (certificates == null || certificates.isEmpty()) {
             return null;
         }
-        
+
         for (X509Certificate cert : certificates) {
-            if (isSelfSigned(cert)) {
+            if (cert != null && isSelfSigned(cert)) {
                 return cert;
             }
         }
-        
+
         return certificates.get(certificates.size() - 1);
     }
 
@@ -284,9 +340,9 @@ public class ChainValidator {
         if (certificates == null || certificates.isEmpty()) {
             return false;
         }
-        
+
         X509Certificate lastCert = certificates.get(certificates.size() - 1);
-        return isSelfSigned(lastCert);
+        return lastCert != null && isSelfSigned(lastCert);
     }
 
     /**
@@ -297,8 +353,13 @@ public class ChainValidator {
      */
     public List<String> getCertificatePathSubjects(List<X509Certificate> certificates) {
         List<String> subjects = new ArrayList<>();
+        if (certificates == null) {
+            return subjects;
+        }
         for (X509Certificate cert : certificates) {
-            subjects.add(cert.getSubjectX500Principal().getName());
+            if (cert != null) {
+                subjects.add(cert.getSubjectX500Principal().getName());
+            }
         }
         return subjects;
     }

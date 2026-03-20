@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
 
 /**
  * Certificate Loader
- * 
+ *
  * Utility class for loading X.509 certificates from various file formats
  * including PEM (Base64-encoded) and DER (binary) formats.
  */
@@ -32,6 +32,9 @@ public class CertificateLoader {
     private final CertificateFactory certificateFactory;
 
     public CertificateLoader(CertificateFactory certificateFactory) {
+        if (certificateFactory == null) {
+            throw new IllegalArgumentException("CertificateFactory cannot be null");
+        }
         this.certificateFactory = certificateFactory;
     }
 
@@ -44,10 +47,17 @@ public class CertificateLoader {
      * @throws CertificateException if the file cannot be parsed
      * @throws IOException if the file cannot be read
      */
-    public List<X509Certificate> loadCertificateChain(File file) 
+    public List<X509Certificate> loadCertificateChain(File file)
             throws CertificateException, IOException {
+        if (file == null) {
+            throw new IllegalArgumentException("Certificate file cannot be null");
+        }
+        if (!file.exists()) {
+            throw new IOException("Certificate file does not exist: " + file.getPath());
+        }
+
         String content = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
-        
+
         if (content.contains(PEM_CERT_HEADER)) {
             return loadPemCertificateChain(content);
         } else {
@@ -63,8 +73,15 @@ public class CertificateLoader {
      * @throws CertificateException if the file cannot be parsed
      * @throws IOException if the file cannot be read
      */
-    public X509Certificate loadSingleCertificate(File file) 
+    public X509Certificate loadSingleCertificate(File file)
             throws CertificateException, IOException {
+        if (file == null) {
+            throw new IllegalArgumentException("Certificate file cannot be null");
+        }
+        if (!file.exists()) {
+            throw new IOException("Certificate file does not exist: " + file.getPath());
+        }
+
         List<X509Certificate> certificates = loadCertificateChain(file);
         if (certificates.isEmpty()) {
             throw new CertificateException("No certificate found in file: " + file.getName());
@@ -79,16 +96,20 @@ public class CertificateLoader {
      * @return list of X.509 certificates
      * @throws CertificateException if the content cannot be parsed
      */
-    public List<X509Certificate> loadPemCertificateChain(String pemContent) 
+    public List<X509Certificate> loadPemCertificateChain(String pemContent)
             throws CertificateException {
+        if (pemContent == null) {
+            throw new CertificateException("PEM content cannot be null");
+        }
+
         List<X509Certificate> certificates = new ArrayList<>();
         Matcher matcher = PEM_PATTERN.matcher(pemContent);
-        
+
         while (matcher.find()) {
             String base64Cert = matcher.group(1)
                     .replaceAll("\\s+", "")
                     .replaceAll("[\\r\\n]", "");
-            
+
             if (!base64Cert.isEmpty()) {
                 try {
                     byte[] certBytes = Base64.getDecoder().decode(base64Cert);
@@ -100,7 +121,7 @@ public class CertificateLoader {
                 }
             }
         }
-        
+
         return certificates;
     }
 
@@ -113,13 +134,20 @@ public class CertificateLoader {
      * @throws CertificateException if the file cannot be parsed
      * @throws IOException if the file cannot be read
      */
-    public List<X509Certificate> loadDerCertificateChain(File file) 
+    public List<X509Certificate> loadDerCertificateChain(File file)
             throws CertificateException, IOException {
+        if (file == null) {
+            throw new IllegalArgumentException("DER certificate file cannot be null");
+        }
+        if (!file.exists()) {
+            throw new IOException("DER certificate file does not exist: " + file.getPath());
+        }
+
         List<X509Certificate> certificates = new ArrayList<>();
-        
+
         try (FileInputStream fis = new FileInputStream(file)) {
             byte[] fileBytes = fis.readAllBytes();
-            
+
             int offset = 0;
             while (offset < fileBytes.length) {
                 try {
@@ -127,7 +155,7 @@ public class CertificateLoader {
                             .generateCertificate(new ByteArrayInputStream(
                                     fileBytes, offset, fileBytes.length - offset));
                     certificates.add(cert);
-                    
+
                     offset += cert.getEncoded().length;
                 } catch (CertificateException e) {
                     if (certificates.isEmpty()) {
@@ -137,7 +165,7 @@ public class CertificateLoader {
                 }
             }
         }
-        
+
         return certificates;
     }
 
@@ -148,8 +176,11 @@ public class CertificateLoader {
      * @return the X.509 certificate
      * @throws CertificateException if the bytes cannot be parsed
      */
-    public X509Certificate loadCertificateFromBytes(byte[] certBytes) 
+    public X509Certificate loadCertificateFromBytes(byte[] certBytes)
             throws CertificateException {
+        if (certBytes == null || certBytes.length == 0) {
+            throw new CertificateException("Certificate bytes cannot be null or empty");
+        }
         return (X509Certificate) certificateFactory
                 .generateCertificate(new ByteArrayInputStream(certBytes));
     }
@@ -161,16 +192,20 @@ public class CertificateLoader {
      * @return list of raw certificate byte arrays
      * @throws CertificateException if the content cannot be parsed
      */
-    public List<byte[]> extractCertificateBytes(String pemContent) 
+    public List<byte[]> extractCertificateBytes(String pemContent)
             throws CertificateException {
+        if (pemContent == null) {
+            throw new CertificateException("PEM content cannot be null");
+        }
+
         List<byte[]> certBytesList = new ArrayList<>();
         Matcher matcher = PEM_PATTERN.matcher(pemContent);
-        
+
         while (matcher.find()) {
             String base64Cert = matcher.group(1)
                     .replaceAll("\\s+", "")
                     .replaceAll("[\\r\\n]", "");
-            
+
             if (!base64Cert.isEmpty()) {
                 try {
                     byte[] certBytes = Base64.getDecoder().decode(base64Cert);
@@ -180,7 +215,7 @@ public class CertificateLoader {
                 }
             }
         }
-        
+
         return certBytesList;
     }
 
@@ -192,16 +227,19 @@ public class CertificateLoader {
      * @throws CertificateException if encoding fails
      */
     public String toPemFormat(X509Certificate certificate) throws CertificateException {
+        if (certificate == null) {
+            throw new CertificateException("Certificate cannot be null");
+        }
         String base64 = Base64.getEncoder().encodeToString(certificate.getEncoded());
         StringBuilder pem = new StringBuilder();
         pem.append(PEM_CERT_HEADER).append("\n");
-        
+
         int lineLength = 64;
         for (int i = 0; i < base64.length(); i += lineLength) {
             int end = Math.min(i + lineLength, base64.length());
             pem.append(base64, i, end).append("\n");
         }
-        
+
         pem.append(PEM_CERT_FOOTER).append("\n");
         return pem.toString();
     }
@@ -214,9 +252,15 @@ public class CertificateLoader {
      * @throws CertificateException if encoding fails
      */
     public String toPemFormat(List<X509Certificate> certificates) throws CertificateException {
+        if (certificates == null) {
+            throw new CertificateException("Certificate list cannot be null");
+        }
+
         StringBuilder pem = new StringBuilder();
         for (X509Certificate cert : certificates) {
-            pem.append(toPemFormat(cert));
+            if (cert != null) {
+                pem.append(toPemFormat(cert));
+            }
         }
         return pem.toString();
     }
@@ -229,6 +273,12 @@ public class CertificateLoader {
      * @throws IOException if the file cannot be read
      */
     public static boolean isPemFile(File file) throws IOException {
+        if (file == null) {
+            return false;
+        }
+        if (!file.exists()) {
+            return false;
+        }
         String content = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
         return content.contains(PEM_CERT_HEADER) && content.contains(PEM_CERT_FOOTER);
     }
@@ -240,11 +290,14 @@ public class CertificateLoader {
      * @return true if the format is valid
      */
     public static boolean isValidPemFormat(String pemContent) {
-        if (!pemContent.contains(PEM_CERT_HEADER) || 
+        if (pemContent == null) {
+            return false;
+        }
+        if (!pemContent.contains(PEM_CERT_HEADER) ||
             !pemContent.contains(PEM_CERT_FOOTER)) {
             return false;
         }
-        
+
         Matcher matcher = PEM_PATTERN.matcher(pemContent);
         while (matcher.find()) {
             String base64Cert = matcher.group(1).replaceAll("\\s+", "");
