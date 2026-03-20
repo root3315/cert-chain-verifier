@@ -29,7 +29,7 @@ import java.util.regex.Pattern;
 
 /**
  * X.509 Certificate Chain Verifier
- * 
+ *
  * A command-line tool for validating X.509 certificate chains with customizable
  * trust anchors. Supports PEM and DER certificate formats.
  */
@@ -64,9 +64,19 @@ public class CertChainVerifier {
      */
     public ValidationResult validateChain(File chainFile, Set<TrustAnchor> trustAnchors,
                                           boolean checkRevocation) {
+        if (chainFile == null) {
+            return ValidationResult.failure("Chain file cannot be null");
+        }
+        if (trustAnchors == null) {
+            return ValidationResult.failure("Trust anchors cannot be null");
+        }
+        if (!chainFile.exists()) {
+            return ValidationResult.failure("Chain file does not exist: " + chainFile.getPath());
+        }
+
         try {
             List<X509Certificate> certificates = certificateLoader.loadCertificateChain(chainFile);
-            
+
             if (certificates.isEmpty()) {
                 return ValidationResult.failure("No certificates found in the chain file");
             }
@@ -91,6 +101,13 @@ public class CertChainVerifier {
      * @return ValidationResult containing the validation status and details
      */
     public ValidationResult validateWithSystemTrust(File chainFile) {
+        if (chainFile == null) {
+            return ValidationResult.failure("Chain file cannot be null");
+        }
+        if (!chainFile.exists()) {
+            return ValidationResult.failure("Chain file does not exist: " + chainFile.getPath());
+        }
+
         try {
             Set<TrustAnchor> systemTrustAnchors = trustStoreManager.loadSystemTrustAnchors();
             System.out.println("Loaded " + systemTrustAnchors.size() + " system trust anchors");
@@ -110,6 +127,19 @@ public class CertChainVerifier {
      */
     public ValidationResult validateWithCustomTrust(File chainFile, File trustStoreFile,
                                                      String trustStorePassword) {
+        if (chainFile == null) {
+            return ValidationResult.failure("Chain file cannot be null");
+        }
+        if (trustStoreFile == null) {
+            return ValidationResult.failure("Trust store file cannot be null");
+        }
+        if (!chainFile.exists()) {
+            return ValidationResult.failure("Chain file does not exist: " + chainFile.getPath());
+        }
+        if (!trustStoreFile.exists()) {
+            return ValidationResult.failure("Trust store file does not exist: " + trustStoreFile.getPath());
+        }
+
         try {
             Set<TrustAnchor> customTrustAnchors = trustStoreManager.loadTrustAnchorsFromFile(
                     trustStoreFile, trustStorePassword);
@@ -128,9 +158,25 @@ public class CertChainVerifier {
      * @return ValidationResult containing the validation status and details
      */
     public ValidationResult validateWithPemTrust(File chainFile, List<File> trustAnchorFiles) {
+        if (chainFile == null) {
+            return ValidationResult.failure("Chain file cannot be null");
+        }
+        if (trustAnchorFiles == null) {
+            return ValidationResult.failure("Trust anchor files list cannot be null");
+        }
+        if (!chainFile.exists()) {
+            return ValidationResult.failure("Chain file does not exist: " + chainFile.getPath());
+        }
+
         try {
             Set<TrustAnchor> pemTrustAnchors = new HashSet<>();
             for (File trustFile : trustAnchorFiles) {
+                if (trustFile == null) {
+                    return ValidationResult.failure("Trust anchor file cannot be null in the list");
+                }
+                if (!trustFile.exists()) {
+                    return ValidationResult.failure("Trust anchor file does not exist: " + trustFile.getPath());
+                }
                 List<X509Certificate> trustCerts = certificateLoader.loadCertificateChain(trustFile);
                 for (X509Certificate cert : trustCerts) {
                     pemTrustAnchors.add(new TrustAnchor(cert, null));
@@ -144,10 +190,17 @@ public class CertChainVerifier {
     }
 
     private void printCertificateInfo(List<X509Certificate> certificates) {
+        if (certificates == null || certificates.isEmpty()) {
+            return;
+        }
         System.out.println("\nCertificate Chain Details:");
         System.out.println("==========================");
         for (int i = 0; i < certificates.size(); i++) {
             X509Certificate cert = certificates.get(i);
+            if (cert == null) {
+                System.out.println("\n[" + i + "] Certificate is null");
+                continue;
+            }
             System.out.println("\n[" + i + "] " + cert.getSubjectX500Principal().getName());
             System.out.println("    Issuer: " + cert.getIssuerX500Principal().getName());
             System.out.println("    Serial: " + cert.getSerialNumber().toString(16).toUpperCase());
@@ -155,7 +208,7 @@ public class CertChainVerifier {
             System.out.println("    Valid To: " + cert.getNotAfter());
             System.out.println("    Version: " + cert.getVersion());
             System.out.println("    Signature Algorithm: " + cert.getSigAlgName());
-            
+
             if (i == 0) {
                 System.out.println("    Type: End Entity Certificate");
             } else if (i == certificates.size() - 1) {
@@ -174,6 +227,9 @@ public class CertChainVerifier {
      * @return list of Base64-encoded certificate bytes
      */
     public static List<byte[]> extractPemCertificates(String pemContent) {
+        if (pemContent == null) {
+            return Collections.emptyList();
+        }
         List<byte[]> certificates = new ArrayList<>();
         Matcher matcher = PEM_PATTERN.matcher(pemContent);
         while (matcher.find()) {
@@ -190,6 +246,9 @@ public class CertChainVerifier {
      * @return true if the certificate is within its validity period
      */
     public static boolean isCertificateValidNow(X509Certificate certificate) {
+        if (certificate == null) {
+            return false;
+        }
         Date now = new Date();
         try {
             certificate.checkValidity(now);
@@ -250,7 +309,7 @@ public class CertChainVerifier {
         }
 
         String command = args[0];
-        
+
         try {
             CertChainVerifier verifier = new CertChainVerifier();
             ValidationResult result;
@@ -272,7 +331,7 @@ public class CertChainVerifier {
                         System.exit(1);
                     }
                     String password = args.length > 3 ? args[3] : "";
-                    result = verifier.validateWithCustomTrust(new File(args[1]), 
+                    result = verifier.validateWithCustomTrust(new File(args[1]),
                             new File(args[2]), password);
                     break;
 
@@ -320,9 +379,9 @@ public class CertChainVerifier {
                             .loadCertificateChain(new File(args[1]));
                     for (int i = 0; i < extractCerts.size(); i++) {
                         X509Certificate cert = extractCerts.get(i);
-                        String filename = "cert_" + i + "_" + 
+                        String filename = "cert_" + i + "_" +
                                 cert.getSerialNumber().toString(16) + ".der";
-                        java.nio.file.Files.write(java.nio.file.Paths.get(filename), 
+                        java.nio.file.Files.write(java.nio.file.Paths.get(filename),
                                 cert.getEncoded());
                         System.out.println("Extracted: " + filename);
                     }
@@ -344,7 +403,7 @@ public class CertChainVerifier {
             } else {
                 System.out.println("Message: " + result.getSuccessMessage());
             }
-            
+
             System.exit(result.isValid() ? 0 : 1);
 
         } catch (CertificateException e) {

@@ -16,7 +16,7 @@ import java.util.Set;
 
 /**
  * Trust Store Manager
- * 
+ *
  * Manages loading and handling of trust stores containing trusted
  * certificate authorities. Supports JKS, PKCS12, and system default trust stores.
  */
@@ -35,33 +35,33 @@ public class TrustStoreManager {
      * @throws NoSuchAlgorithmException if the algorithm is not available
      * @throws CertificateException if certificates cannot be loaded
      */
-    public Set<TrustAnchor> loadSystemTrustAnchors() 
+    public Set<TrustAnchor> loadSystemTrustAnchors()
             throws KeyStoreException, IOException, NoSuchAlgorithmException, CertificateException {
-        
+
         String trustStorePath = System.getProperty("java.home");
         if (trustStorePath == null) {
             throw new KeyStoreException("Cannot determine Java home directory");
         }
-        
-        String cacertsPath = trustStorePath + 
-                File.separator + "lib" + 
-                File.separator + "security" + 
+
+        String cacertsPath = trustStorePath +
+                File.separator + "lib" +
+                File.separator + "security" +
                 File.separator + "cacerts";
-        
+
         File cacertsFile = new File(cacertsPath);
         if (!cacertsFile.exists()) {
-            cacertsPath = trustStorePath + 
-                    File.separator + "jre" + 
-                    File.separator + "lib" + 
-                    File.separator + "security" + 
+            cacertsPath = trustStorePath +
+                    File.separator + "jre" +
+                    File.separator + "lib" +
+                    File.separator + "security" +
                     File.separator + "cacerts";
             cacertsFile = new File(cacertsPath);
         }
-        
+
         if (!cacertsFile.exists()) {
             throw new KeyStoreException("System trust store not found at: " + cacertsPath);
         }
-        
+
         return loadTrustAnchorsFromFile(cacertsFile, "changeit");
     }
 
@@ -76,17 +76,23 @@ public class TrustStoreManager {
      * @throws NoSuchAlgorithmException if the algorithm is not available
      * @throws CertificateException if certificates cannot be loaded
      */
-    public Set<TrustAnchor> loadTrustAnchorsFromFile(File trustStoreFile, String password) 
+    public Set<TrustAnchor> loadTrustAnchorsFromFile(File trustStoreFile, String password)
             throws KeyStoreException, IOException, NoSuchAlgorithmException, CertificateException {
-        
+        if (trustStoreFile == null) {
+            throw new IllegalArgumentException("Trust store file cannot be null");
+        }
+        if (!trustStoreFile.exists()) {
+            throw new IOException("Trust store file does not exist: " + trustStoreFile.getPath());
+        }
+
         String type = detectKeyStoreType(trustStoreFile);
         KeyStore trustStore = KeyStore.getInstance(type);
-        
+
         try (FileInputStream fis = new FileInputStream(trustStoreFile)) {
             char[] passwordChars = password != null ? password.toCharArray() : new char[0];
             trustStore.load(fis, passwordChars);
         }
-        
+
         return extractTrustAnchors(trustStore);
     }
 
@@ -97,8 +103,11 @@ public class TrustStoreManager {
      * @return set of trust anchors
      * @throws KeyStoreException if the trust store cannot be accessed
      */
-    public Set<TrustAnchor> loadTrustAnchorsFromKeyStore(KeyStore keyStore) 
+    public Set<TrustAnchor> loadTrustAnchorsFromKeyStore(KeyStore keyStore)
             throws KeyStoreException {
+        if (keyStore == null) {
+            throw new IllegalArgumentException("KeyStore cannot be null");
+        }
         return extractTrustAnchors(keyStore);
     }
 
@@ -110,6 +119,9 @@ public class TrustStoreManager {
      * @throws KeyStoreException if the KeyStore cannot be created
      */
     public KeyStore createEmptyKeyStore(String type) throws KeyStoreException {
+        if (type == null || type.isEmpty()) {
+            throw new IllegalArgumentException("KeyStore type cannot be null or empty");
+        }
         KeyStore keyStore = KeyStore.getInstance(type);
         keyStore.load(null, null);
         return keyStore;
@@ -123,8 +135,17 @@ public class TrustStoreManager {
      * @param certificate the certificate to add
      * @throws KeyStoreException if the certificate cannot be added
      */
-    public void addTrustAnchor(KeyStore keyStore, String alias, X509Certificate certificate) 
+    public void addTrustAnchor(KeyStore keyStore, String alias, X509Certificate certificate)
             throws KeyStoreException {
+        if (keyStore == null) {
+            throw new IllegalArgumentException("KeyStore cannot be null");
+        }
+        if (alias == null || alias.isEmpty()) {
+            throw new IllegalArgumentException("Alias cannot be null or empty");
+        }
+        if (certificate == null) {
+            throw new IllegalArgumentException("Certificate cannot be null");
+        }
         keyStore.setCertificateEntry(alias, certificate);
     }
 
@@ -139,8 +160,15 @@ public class TrustStoreManager {
      * @throws NoSuchAlgorithmException if the algorithm is not available
      * @throws CertificateException if certificates cannot be encoded
      */
-    public void saveKeyStore(KeyStore keyStore, File file, String password) 
+    public void saveKeyStore(KeyStore keyStore, File file, String password)
             throws IOException, KeyStoreException, NoSuchAlgorithmException, CertificateException {
+        if (keyStore == null) {
+            throw new IllegalArgumentException("KeyStore cannot be null");
+        }
+        if (file == null) {
+            throw new IllegalArgumentException("File cannot be null");
+        }
+
         try (java.io.FileOutputStream fos = new java.io.FileOutputStream(file)) {
             char[] passwordChars = password != null ? password.toCharArray() : new char[0];
             keyStore.store(fos, passwordChars);
@@ -154,16 +182,20 @@ public class TrustStoreManager {
      * @return the detected KeyStore type
      */
     private String detectKeyStoreType(File file) {
+        if (file == null) {
+            return DEFAULT_KEYSTORE_TYPE;
+        }
+
         String fileName = file.getName().toLowerCase();
-        
+
         if (fileName.endsWith(".p12") || fileName.endsWith(".pkcs12")) {
             return PKCS12_TYPE;
         }
-        
+
         if (fileName.endsWith(".jks")) {
             return DEFAULT_KEYSTORE_TYPE;
         }
-        
+
         return DEFAULT_KEYSTORE_TYPE;
     }
 
@@ -174,14 +206,18 @@ public class TrustStoreManager {
      * @return set of trust anchors
      * @throws KeyStoreException if the KeyStore cannot be accessed
      */
-    private Set<TrustAnchor> extractTrustAnchors(KeyStore keyStore) 
+    private Set<TrustAnchor> extractTrustAnchors(KeyStore keyStore)
             throws KeyStoreException {
+        if (keyStore == null) {
+            throw new KeyStoreException("KeyStore cannot be null");
+        }
+
         Set<TrustAnchor> trustAnchors = new HashSet<>();
-        
+
         Enumeration<String> aliases = keyStore.aliases();
         while (aliases.hasMoreElements()) {
             String alias = aliases.nextElement();
-            
+
             if (keyStore.isCertificateEntry(alias)) {
                 Certificate cert = keyStore.getCertificate(alias);
                 if (cert instanceof X509Certificate) {
@@ -190,7 +226,7 @@ public class TrustStoreManager {
                 }
             }
         }
-        
+
         return trustAnchors;
     }
 
@@ -202,6 +238,10 @@ public class TrustStoreManager {
      * @throws KeyStoreException if the KeyStore cannot be accessed
      */
     public int getTrustAnchorCount(KeyStore keyStore) throws KeyStoreException {
+        if (keyStore == null) {
+            throw new IllegalArgumentException("KeyStore cannot be null");
+        }
+
         int count = 0;
         Enumeration<String> aliases = keyStore.aliases();
         while (aliases.hasMoreElements()) {
@@ -221,8 +261,15 @@ public class TrustStoreManager {
      * @return true if the certificate is in the trust store
      * @throws KeyStoreException if the KeyStore cannot be accessed
      */
-    public boolean containsCertificate(KeyStore keyStore, X509Certificate certificate) 
+    public boolean containsCertificate(KeyStore keyStore, X509Certificate certificate)
             throws KeyStoreException {
+        if (keyStore == null) {
+            throw new IllegalArgumentException("KeyStore cannot be null");
+        }
+        if (certificate == null) {
+            return false;
+        }
+
         Enumeration<String> aliases = keyStore.aliases();
         while (aliases.hasMoreElements()) {
             String alias = aliases.nextElement();
@@ -246,26 +293,26 @@ public class TrustStoreManager {
         if (javaHome == null) {
             return null;
         }
-        
-        String cacertsPath = javaHome + 
-                File.separator + "lib" + 
-                File.separator + "security" + 
+
+        String cacertsPath = javaHome +
+                File.separator + "lib" +
+                File.separator + "security" +
                 File.separator + "cacerts";
-        
+
         if (new File(cacertsPath).exists()) {
             return cacertsPath;
         }
-        
-        String jreCacertsPath = javaHome + 
-                File.separator + "jre" + 
-                File.separator + "lib" + 
-                File.separator + "security" + 
+
+        String jreCacertsPath = javaHome +
+                File.separator + "jre" +
+                File.separator + "lib" +
+                File.separator + "security" +
                 File.separator + "cacerts";
-        
+
         if (new File(jreCacertsPath).exists()) {
             return jreCacertsPath;
         }
-        
+
         return null;
     }
 
@@ -278,8 +325,18 @@ public class TrustStoreManager {
      * @throws CertificateException if the certificate cannot be loaded
      * @throws IOException if the file cannot be read
      */
-    public TrustAnchor createTrustAnchorFromFile(File certFile, CertificateLoader certificateLoader) 
+    public TrustAnchor createTrustAnchorFromFile(File certFile, CertificateLoader certificateLoader)
             throws CertificateException, IOException {
+        if (certFile == null) {
+            throw new IllegalArgumentException("Certificate file cannot be null");
+        }
+        if (certificateLoader == null) {
+            throw new IllegalArgumentException("CertificateLoader cannot be null");
+        }
+        if (!certFile.exists()) {
+            throw new IOException("Certificate file does not exist: " + certFile.getPath());
+        }
+
         X509Certificate cert = certificateLoader.loadSingleCertificate(certFile);
         return new TrustAnchor(cert, null);
     }
@@ -291,14 +348,20 @@ public class TrustStoreManager {
      * @return combined set of trust anchors
      * @throws KeyStoreException if any KeyStore cannot be accessed
      */
-    public Set<TrustAnchor> mergeTrustAnchors(KeyStore... keyStores) 
+    public Set<TrustAnchor> mergeTrustAnchors(KeyStore... keyStores)
             throws KeyStoreException {
-        Set<TrustAnchor> merged = new HashSet<>();
-        
-        for (KeyStore keyStore : keyStores) {
-            merged.addAll(extractTrustAnchors(keyStore));
+        if (keyStores == null) {
+            throw new IllegalArgumentException("KeyStores array cannot be null");
         }
-        
+
+        Set<TrustAnchor> merged = new HashSet<>();
+
+        for (KeyStore keyStore : keyStores) {
+            if (keyStore != null) {
+                merged.addAll(extractTrustAnchors(keyStore));
+            }
+        }
+
         return merged;
     }
 
@@ -310,6 +373,13 @@ public class TrustStoreManager {
      * @return true if the trust store is valid
      */
     public boolean isValidTrustStore(File trustStoreFile, String password) {
+        if (trustStoreFile == null) {
+            return false;
+        }
+        if (!trustStoreFile.exists()) {
+            return false;
+        }
+
         try {
             KeyStore keyStore = KeyStore.getInstance(detectKeyStoreType(trustStoreFile));
             try (FileInputStream fis = new FileInputStream(trustStoreFile)) {

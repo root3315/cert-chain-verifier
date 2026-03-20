@@ -63,6 +63,12 @@ class CertChainVerifierTest {
     }
 
     @Test
+    void testNullPemExtraction() {
+        List<byte[]> certs = CertChainVerifier.extractPemCertificates(null);
+        assertTrue(certs.isEmpty());
+    }
+
+    @Test
     void testMultiplePemCertificates() throws CertificateException {
         String pemContent = "-----BEGIN CERTIFICATE-----\n" +
                 "MIIBkTCB+wIJAKHBfpegPjMCMA0GCSqGSIb3DQEBCwUAMBExDzANBgNVBAMMBnRl\n" +
@@ -101,12 +107,92 @@ class CertChainVerifierTest {
     }
 
     @Test
+    void testNullPemFormatValidation() {
+        assertFalse(CertificateLoader.isValidPemFormat(null));
+    }
+
+    @Test
     void testLoadEmptyCertificateChain() throws IOException {
         File emptyFile = tempDir.resolve("empty.pem").toFile();
         Files.write(emptyFile.toPath(), "".getBytes(StandardCharsets.UTF_8));
 
         List<X509Certificate> certs = certificateLoader.loadCertificateChain(emptyFile);
         assertTrue(certs.isEmpty());
+    }
+
+    @Test
+    void testLoadNullCertificateChain() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            certificateLoader.loadCertificateChain(null);
+        });
+    }
+
+    @Test
+    void testLoadNonExistentCertificateChain() {
+        File nonExistentFile = new File("/nonexistent/path/cert.pem");
+        assertThrows(IOException.class, () -> {
+            certificateLoader.loadCertificateChain(nonExistentFile);
+        });
+    }
+
+    @Test
+    void testLoadSingleCertificateNull() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            certificateLoader.loadSingleCertificate(null);
+        });
+    }
+
+    @Test
+    void testLoadPemCertificateChainNull() {
+        assertThrows(CertificateException.class, () -> {
+            certificateLoader.loadPemCertificateChain(null);
+        });
+    }
+
+    @Test
+    void testLoadDerCertificateChainNull() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            certificateLoader.loadDerCertificateChain(null);
+        });
+    }
+
+    @Test
+    void testLoadCertificateFromBytesNull() {
+        assertThrows(CertificateException.class, () -> {
+            certificateLoader.loadCertificateFromBytes(null);
+        });
+    }
+
+    @Test
+    void testExtractCertificateBytesNull() {
+        assertThrows(CertificateException.class, () -> {
+            certificateLoader.extractCertificateBytes(null);
+        });
+    }
+
+    @Test
+    void testToPemFormatNullCertificate() {
+        assertThrows(CertificateException.class, () -> {
+            certificateLoader.toPemFormat((X509Certificate) null);
+        });
+    }
+
+    @Test
+    void testToPemFormatNullList() {
+        assertThrows(CertificateException.class, () -> {
+            certificateLoader.toPemFormat((List<X509Certificate>) null);
+        });
+    }
+
+    @Test
+    void testIsPemFileNull() throws IOException {
+        assertFalse(CertificateLoader.isPemFile(null));
+    }
+
+    @Test
+    void testIsPemFileNonExistent() throws IOException {
+        File nonExistentFile = new File("/nonexistent/path/cert.pem");
+        assertFalse(CertificateLoader.isPemFile(nonExistentFile));
     }
 
     @Test
@@ -121,11 +207,35 @@ class CertChainVerifierTest {
     void testChainValidatorNullChain() {
         CertChainVerifier.ValidationResult result = chainValidator.validateBasicChain(null);
         assertFalse(result.isValid());
-        assertTrue(result.getErrorMessage().contains("empty or null"));
+        assertTrue(result.getErrorMessage().contains("null"));
     }
 
     @Test
-    void testIsSelfSigned() {
+    void testChainValidatorFullValidationNullChecks() {
+        CertChainVerifier.ValidationResult result = chainValidator.validate(
+                null,
+                Collections.emptySet(),
+                null,
+                null,
+                false);
+        assertFalse(result.isValid());
+        assertTrue(result.getErrorMessage().contains("null"));
+    }
+
+    @Test
+    void testChainValidatorNoTrustAnchors() {
+        CertChainVerifier.ValidationResult result = chainValidator.validate(
+                Collections.emptyList(),
+                null,
+                null,
+                null,
+                false);
+        assertFalse(result.isValid());
+        assertTrue(result.getErrorMessage().contains("null"));
+    }
+
+    @Test
+    void testIsSelfSignedNull() {
         assertFalse(chainValidator.isSelfSigned(null));
     }
 
@@ -135,14 +245,23 @@ class CertChainVerifierTest {
     }
 
     @Test
+    void testFindRootCertificateNull() {
+        assertNull(chainValidator.findRootCertificate(null));
+    }
+
+    @Test
     void testIsCompleteChainEmpty() {
         assertFalse(chainValidator.isCompleteChain(Collections.emptyList()));
     }
 
     @Test
-    void testGetCertificatePathSubjectsEmpty() {
-        List<String> subjects = chainValidator.getCertificatePathSubjects(
-                Collections.emptyList());
+    void testIsCompleteChainNull() {
+        assertFalse(chainValidator.isCompleteChain(null));
+    }
+
+    @Test
+    void testGetCertificatePathSubjectsNull() {
+        List<String> subjects = chainValidator.getCertificatePathSubjects(null);
         assertTrue(subjects.isEmpty());
     }
 
@@ -160,6 +279,20 @@ class CertChainVerifierTest {
     }
 
     @Test
+    void testCreateEmptyKeyStoreNullType() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            trustStoreManager.createEmptyKeyStore(null);
+        });
+    }
+
+    @Test
+    void testCreateEmptyKeyStoreEmptyType() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            trustStoreManager.createEmptyKeyStore("");
+        });
+    }
+
+    @Test
     void testSystemTrustStorePath() {
         String path = trustStoreManager.getSystemTrustStorePath();
         if (path != null) {
@@ -169,7 +302,7 @@ class CertChainVerifierTest {
 
     @Test
     void testValidationResultSuccess() {
-        CertChainVerifier.ValidationResult result = 
+        CertChainVerifier.ValidationResult result =
                 CertChainVerifier.ValidationResult.success("Test success message");
         assertTrue(result.isValid());
         assertEquals("Test success message", result.getSuccessMessage());
@@ -178,7 +311,7 @@ class CertChainVerifierTest {
 
     @Test
     void testValidationResultFailure() {
-        CertChainVerifier.ValidationResult result = 
+        CertChainVerifier.ValidationResult result =
                 CertChainVerifier.ValidationResult.failure("Test error message");
         assertFalse(result.isValid());
         assertEquals("Test error message", result.getErrorMessage());
@@ -194,7 +327,7 @@ class CertChainVerifierTest {
                 "AgMBAAGjUzBRMB0GA1UdDgQWBBQTest1234567890abcdefghijk==";
         byte[] certBytes = Base64.getDecoder().decode(testBase64);
         X509Certificate cert = certificateLoader.loadCertificateFromBytes(certBytes);
-        
+
         String pem = certificateLoader.toPemFormat(cert);
         assertTrue(pem.contains("-----BEGIN CERTIFICATE-----"));
         assertTrue(pem.contains("-----END CERTIFICATE-----"));
@@ -225,9 +358,77 @@ class CertChainVerifierTest {
     }
 
     @Test
+    void testSaveKeyStoreNullKeyStore() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            trustStoreManager.saveKeyStore(null, tempDir.resolve("test.jks").toFile(), "password");
+        });
+    }
+
+    @Test
+    void testSaveKeyStoreNullFile() throws Exception {
+        KeyStore keyStore = trustStoreManager.createEmptyKeyStore("JKS");
+        assertThrows(IllegalArgumentException.class, () -> {
+            trustStoreManager.saveKeyStore(keyStore, null, "password");
+        });
+    }
+
+    @Test
     void testIsValidTrustStore() throws IOException {
         File nonExistentFile = tempDir.resolve("nonexistent.jks").toFile();
         assertFalse(trustStoreManager.isValidTrustStore(nonExistentFile, "password"));
+    }
+
+    @Test
+    void testIsValidTrustStoreNull() {
+        assertFalse(trustStoreManager.isValidTrustStore(null, "password"));
+    }
+
+    @Test
+    void testLoadTrustAnchorsFromKeyStoreNull() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            trustStoreManager.loadTrustAnchorsFromKeyStore(null);
+        });
+    }
+
+    @Test
+    void testGetTrustAnchorCountNull() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            trustStoreManager.getTrustAnchorCount(null);
+        });
+    }
+
+    @Test
+    void testContainsCertificateNullKeyStore() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            trustStoreManager.containsCertificate(null, null);
+        });
+    }
+
+    @Test
+    void testContainsCertificateNullCertificate() throws Exception {
+        KeyStore keyStore = trustStoreManager.createEmptyKeyStore("JKS");
+        assertFalse(trustStoreManager.containsCertificate(keyStore, null));
+    }
+
+    @Test
+    void testCreateTrustAnchorFromFileNullFile() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            trustStoreManager.createTrustAnchorFromFile(null, certificateLoader);
+        });
+    }
+
+    @Test
+    void testCreateTrustAnchorFromFileNullLoader() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            trustStoreManager.createTrustAnchorFromFile(tempDir.resolve("cert.pem").toFile(), null);
+        });
+    }
+
+    @Test
+    void testMergeTrustAnchorsNull() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            trustStoreManager.mergeTrustAnchors((KeyStore[]) null);
+        });
     }
 
     @Test
@@ -279,5 +480,91 @@ class CertChainVerifierTest {
                 }
             }
         });
+    }
+
+    @Test
+    void testIsCertificateValidNowNull() {
+        assertFalse(CertChainVerifier.isCertificateValidNow(null));
+    }
+
+    @Test
+    void testValidateChainNullFile() throws CertificateException {
+        CertChainVerifier verifier = new CertChainVerifier();
+        CertChainVerifier.ValidationResult result = verifier.validateChain(
+                null,
+                Collections.emptySet(),
+                false);
+        assertFalse(result.isValid());
+        assertTrue(result.getErrorMessage().contains("null"));
+    }
+
+    @Test
+    void testValidateChainNullTrustAnchors() throws IOException, CertificateException {
+        CertChainVerifier verifier = new CertChainVerifier();
+        File chainFile = tempDir.resolve("chain.pem").toFile();
+        Files.write(chainFile.toPath(), "test".getBytes(StandardCharsets.UTF_8));
+
+        CertChainVerifier.ValidationResult result = verifier.validateChain(
+                chainFile,
+                null,
+                false);
+        assertFalse(result.isValid());
+        assertTrue(result.getErrorMessage().contains("null"));
+    }
+
+    @Test
+    void testValidateWithSystemTrustNull() throws IOException, CertificateException {
+        CertChainVerifier verifier = new CertChainVerifier();
+        CertChainVerifier.ValidationResult result = verifier.validateWithSystemTrust(null);
+        assertFalse(result.isValid());
+        assertTrue(result.getErrorMessage().contains("null"));
+    }
+
+    @Test
+    void testValidateWithCustomTrustNullChain() {
+        CertChainVerifier verifier = new CertChainVerifier();
+        CertChainVerifier.ValidationResult result = verifier.validateWithCustomTrust(
+                null,
+                tempDir.resolve("trust.jks").toFile(),
+                "password");
+        assertFalse(result.isValid());
+        assertTrue(result.getErrorMessage().contains("null"));
+    }
+
+    @Test
+    void testValidateWithCustomTrustNullTrustStore() throws IOException, CertificateException {
+        CertChainVerifier verifier = new CertChainVerifier();
+        File chainFile = tempDir.resolve("chain.pem").toFile();
+        Files.write(chainFile.toPath(), "test".getBytes(StandardCharsets.UTF_8));
+
+        CertChainVerifier.ValidationResult result = verifier.validateWithCustomTrust(
+                chainFile,
+                null,
+                "password");
+        assertFalse(result.isValid());
+        assertTrue(result.getErrorMessage().contains("null"));
+    }
+
+    @Test
+    void testValidateWithPemTrustNullChain() {
+        CertChainVerifier verifier = new CertChainVerifier();
+        CertChainVerifier.ValidationResult result = verifier.validateWithPemTrust(
+                null,
+                Collections.emptyList());
+        assertFalse(result.isValid());
+        assertTrue(result.getErrorMessage().contains("null"));
+    }
+
+    @Test
+    void testValidateWithPemTrustNullList() throws IOException, CertificateException {
+        CertChainVerifier verifier = new CertChainVerifier();
+        File chainFile = tempDir.resolve("chain.pem").toFile();
+        Files.write(chainFile.toPath(), "test".getBytes(StandardCharsets.UTF_8));
+
+        CertChainVerifier.ValidationResult result = verifier.validateWithPemTrust(
+                chainFile,
+                null);
+        assertFalse(result.isValid());
+        assertTrue(result.getErrorMessage().contains("null"));
     }
 }
