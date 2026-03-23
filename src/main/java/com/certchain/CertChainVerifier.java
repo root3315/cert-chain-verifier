@@ -1,5 +1,8 @@
 package com.certchain;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -34,6 +37,8 @@ import java.util.regex.Pattern;
  * trust anchors. Supports PEM and DER certificate formats.
  */
 public class CertChainVerifier {
+
+    private static final Logger logger = LoggerFactory.getLogger(CertChainVerifier.class);
 
     private static final String PEM_CERT_HEADER = "-----BEGIN CERTIFICATE-----";
     private static final String PEM_CERT_FOOTER = "-----END CERTIFICATE-----";
@@ -81,15 +86,17 @@ public class CertChainVerifier {
                 return ValidationResult.failure("No certificates found in the chain file");
             }
 
-            System.out.println("Loaded " + certificates.size() + " certificate(s) from chain");
+            logger.info("Loaded {} certificate(s) from chain", certificates.size());
             printCertificateInfo(certificates);
 
             return chainValidator.validate(certificates, trustAnchors, certPathValidator,
                     certificateFactory, checkRevocation);
 
         } catch (CertificateException e) {
+            logger.error("Failed to parse certificates: {}", e.getMessage());
             return ValidationResult.failure("Failed to parse certificates: " + e.getMessage());
         } catch (IOException e) {
+            logger.error("Failed to read chain file: {}", e.getMessage());
             return ValidationResult.failure("Failed to read chain file: " + e.getMessage());
         }
     }
@@ -110,9 +117,10 @@ public class CertChainVerifier {
 
         try {
             Set<TrustAnchor> systemTrustAnchors = trustStoreManager.loadSystemTrustAnchors();
-            System.out.println("Loaded " + systemTrustAnchors.size() + " system trust anchors");
+            logger.info("Loaded {} system trust anchors", systemTrustAnchors.size());
             return validateChain(chainFile, systemTrustAnchors, false);
         } catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException e) {
+            logger.error("Failed to load system trust store: {}", e.getMessage());
             return ValidationResult.failure("Failed to load system trust store: " + e.getMessage());
         }
     }
@@ -143,9 +151,10 @@ public class CertChainVerifier {
         try {
             Set<TrustAnchor> customTrustAnchors = trustStoreManager.loadTrustAnchorsFromFile(
                     trustStoreFile, trustStorePassword);
-            System.out.println("Loaded " + customTrustAnchors.size() + " custom trust anchors");
+            logger.info("Loaded {} custom trust anchors", customTrustAnchors.size());
             return validateChain(chainFile, customTrustAnchors, false);
         } catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException e) {
+            logger.error("Failed to load custom trust store: {}", e.getMessage());
             return ValidationResult.failure("Failed to load custom trust store: " + e.getMessage());
         }
     }
@@ -182,9 +191,10 @@ public class CertChainVerifier {
                     pemTrustAnchors.add(new TrustAnchor(cert, null));
                 }
             }
-            System.out.println("Loaded " + pemTrustAnchors.size() + " PEM trust anchors");
+            logger.info("Loaded {} PEM trust anchors", pemTrustAnchors.size());
             return validateChain(chainFile, pemTrustAnchors, false);
         } catch (CertificateException | IOException e) {
+            logger.error("Failed to load PEM trust anchors: {}", e.getMessage());
             return ValidationResult.failure("Failed to load PEM trust anchors: " + e.getMessage());
         }
     }
@@ -193,31 +203,30 @@ public class CertChainVerifier {
         if (certificates == null || certificates.isEmpty()) {
             return;
         }
-        System.out.println("\nCertificate Chain Details:");
-        System.out.println("==========================");
+        logger.debug("Certificate Chain Details:");
+        logger.debug("==========================");
         for (int i = 0; i < certificates.size(); i++) {
             X509Certificate cert = certificates.get(i);
             if (cert == null) {
-                System.out.println("\n[" + i + "] Certificate is null");
+                logger.debug("[{}] Certificate is null", i);
                 continue;
             }
-            System.out.println("\n[" + i + "] " + cert.getSubjectX500Principal().getName());
-            System.out.println("    Issuer: " + cert.getIssuerX500Principal().getName());
-            System.out.println("    Serial: " + cert.getSerialNumber().toString(16).toUpperCase());
-            System.out.println("    Valid From: " + cert.getNotBefore());
-            System.out.println("    Valid To: " + cert.getNotAfter());
-            System.out.println("    Version: " + cert.getVersion());
-            System.out.println("    Signature Algorithm: " + cert.getSigAlgName());
+            logger.debug("[{}] {}", i, cert.getSubjectX500Principal().getName());
+            logger.debug("    Issuer: {}", cert.getIssuerX500Principal().getName());
+            logger.debug("    Serial: {}", cert.getSerialNumber().toString(16).toUpperCase());
+            logger.debug("    Valid From: {}", cert.getNotBefore());
+            logger.debug("    Valid To: {}", cert.getNotAfter());
+            logger.debug("    Version: {}", cert.getVersion());
+            logger.debug("    Signature Algorithm: {}", cert.getSigAlgName());
 
             if (i == 0) {
-                System.out.println("    Type: End Entity Certificate");
+                logger.debug("    Type: End Entity Certificate");
             } else if (i == certificates.size() - 1) {
-                System.out.println("    Type: Root Certificate");
+                logger.debug("    Type: Root Certificate");
             } else {
-                System.out.println("    Type: Intermediate Certificate");
+                logger.debug("    Type: Intermediate Certificate");
             }
         }
-        System.out.println();
     }
 
     /**
@@ -395,19 +404,19 @@ public class CertChainVerifier {
                     return;
             }
 
-            System.out.println("\nValidation Result:");
-            System.out.println("==================");
-            System.out.println("Status: " + (result.isValid() ? "VALID" : "INVALID"));
+            logger.info("Validation Result:");
+            logger.info("==================");
+            logger.info("Status: {}", result.isValid() ? "VALID" : "INVALID");
             if (!result.isValid()) {
-                System.out.println("Error: " + result.getErrorMessage());
+                logger.error("Error: {}", result.getErrorMessage());
             } else {
-                System.out.println("Message: " + result.getSuccessMessage());
+                logger.info("Message: {}", result.getSuccessMessage());
             }
 
             System.exit(result.isValid() ? 0 : 1);
 
         } catch (CertificateException e) {
-            System.err.println("Error initializing certificate verifier: " + e.getMessage());
+            logger.error("Error initializing certificate verifier: {}", e.getMessage());
             System.exit(1);
         }
     }
