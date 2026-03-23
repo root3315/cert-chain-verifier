@@ -1,5 +1,8 @@
 package com.certchain;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.security.InvalidAlgorithmParameterException;
 import java.security.cert.CertPath;
 import java.security.cert.CertPathValidator;
@@ -26,6 +29,8 @@ import java.util.Set;
  * Supports revocation checking and custom validation parameters.
  */
 public class ChainValidator {
+
+    private static final Logger logger = LoggerFactory.getLogger(ChainValidator.class);
 
     private static final String PKIX_ALGORITHM = "PKIX";
 
@@ -90,19 +95,24 @@ public class ChainValidator {
                         ? trustedAnchor.getTrustedCert().getSubjectX500Principal().getName()
                         : trustedAnchor.getCA().toString();
 
+                logger.debug("Certificate chain validated successfully. Trusted anchor: {}", anchorSubject);
                 return CertChainVerifier.ValidationResult.success(
                         "Certificate chain is valid. Trusted anchor: " + anchorSubject);
             }
 
+            logger.debug("Certificate chain validated successfully");
             return CertChainVerifier.ValidationResult.success(
                     "Certificate chain is valid");
 
         } catch (CertPathValidatorException e) {
+            logger.error("Certificate validation failed: {}", e.getReason());
             return handleValidationException(e, certificates);
         } catch (InvalidAlgorithmParameterException e) {
+            logger.error("Invalid algorithm parameters: {}", e.getMessage());
             return CertChainVerifier.ValidationResult.failure(
                     "Invalid algorithm parameters: " + e.getMessage());
         } catch (CertificateException e) {
+            logger.error("Certificate parsing error: {}", e.getMessage());
             return CertChainVerifier.ValidationResult.failure(
                     "Certificate parsing error: " + e.getMessage());
         }
@@ -209,8 +219,9 @@ public class ChainValidator {
                 revocationChecker.setOptions(Collections.singleton(
                         PKIXRevocationChecker.Option.NO_FALLBACK));
                 params.addCertPathChecker(revocationChecker);
+                logger.debug("Revocation checking enabled");
             } catch (Exception e) {
-                System.out.println("Warning: Could not configure revocation checker: " + e.getMessage());
+                logger.warn("Could not configure revocation checker: {}", e.getMessage());
             }
         }
 
@@ -253,6 +264,8 @@ public class ChainValidator {
             errorMessage.append("\nCause: ").append(cause.getMessage());
         }
 
+        logger.debug("Validation exception details: {}", errorMessage);
+
         return CertChainVerifier.ValidationResult.failure(errorMessage.toString());
     }
 
@@ -289,9 +302,11 @@ public class ChainValidator {
             message.append(", Root: ").append(
                     root.getSubjectX500Principal().getName());
 
+            logger.debug("Basic chain validation passed: {}", message);
             return CertChainVerifier.ValidationResult.success(message.toString());
 
         } catch (CertificateException e) {
+            logger.error("Basic chain validation failed: {}", e.getMessage());
             return CertChainVerifier.ValidationResult.failure(e.getMessage());
         }
     }
