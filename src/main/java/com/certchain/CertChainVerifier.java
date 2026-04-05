@@ -51,9 +51,13 @@ public class CertChainVerifier {
     private final ChainValidator chainValidator;
     private final TrustStoreManager trustStoreManager;
 
-    public CertChainVerifier() throws CertificateException {
-        this.certificateFactory = CertificateFactory.getInstance("X.509");
-        this.certPathValidator = CertPathValidator.getInstance("PKIX");
+    public CertChainVerifier() {
+        try {
+            this.certificateFactory = CertificateFactory.getInstance("X.509");
+            this.certPathValidator = CertPathValidator.getInstance("PKIX");
+        } catch (CertificateException | NoSuchAlgorithmException e) {
+            throw new RuntimeException("Failed to initialize certificate verifier: " + e.getMessage(), e);
+        }
         this.certificateLoader = new CertificateLoader(certificateFactory);
         this.chainValidator = new ChainValidator();
         this.trustStoreManager = new TrustStoreManager();
@@ -415,8 +419,14 @@ public class CertChainVerifier {
 
             System.exit(result.isValid() ? 0 : 1);
 
+        } catch (RuntimeException e) {
+            logger.error("Fatal error: {}", e.getMessage());
+            System.exit(1);
         } catch (CertificateException e) {
             logger.error("Error initializing certificate verifier: {}", e.getMessage());
+            System.exit(1);
+        } catch (IOException e) {
+            logger.error("I/O error: {}", e.getMessage());
             System.exit(1);
         }
     }

@@ -148,14 +148,63 @@ public class ChainValidator {
             }
 
             if (now.before(notBefore)) {
+                long daysUntilValid = (notBefore.getTime() - now.getTime()) / (1000L * 60 * 60 * 24);
+                String certType = getCertificateType(i, certificates.size());
                 throw new CertificateException(String.format(
-                        "Certificate %d is not yet valid. Valid from: %s", i, notBefore));
+                        "Certificate is not yet valid.%n" +
+                        "  Index:          %d (%s)%n" +
+                        "  Subject:        %s%n" +
+                        "  Issuer:         %s%n" +
+                        "  Serial:         %s%n" +
+                        "  Valid From:     %s%n" +
+                        "  Valid To:       %s%n" +
+                        "  Days Until Valid: %d day(s)",
+                        i, certType,
+                        cert.getSubjectX500Principal().getName(),
+                        cert.getIssuerX500Principal().getName(),
+                        cert.getSerialNumber().toString(16).toUpperCase(),
+                        notBefore, notAfter,
+                        daysUntilValid));
             }
 
             if (now.after(notAfter)) {
+                long daysExpired = (now.getTime() - notAfter.getTime()) / (1000L * 60 * 60 * 24);
+                String certType = getCertificateType(i, certificates.size());
                 throw new CertificateException(String.format(
-                        "Certificate %d has expired. Expired on: %s", i, notAfter));
+                        "Certificate has expired.%n" +
+                        "  Index:          %d (%s)%n" +
+                        "  Subject:        %s%n" +
+                        "  Issuer:         %s%n" +
+                        "  Serial:         %s%n" +
+                        "  Valid From:     %s%n" +
+                        "  Expired On:     %s%n" +
+                        "  Days Expired:   %d day(s)",
+                        i, certType,
+                        cert.getSubjectX500Principal().getName(),
+                        cert.getIssuerX500Principal().getName(),
+                        cert.getSerialNumber().toString(16).toUpperCase(),
+                        notBefore, notAfter,
+                        daysExpired));
             }
+        }
+    }
+
+    /**
+     * Determines the type of certificate based on its position in the chain.
+     *
+     * @param index the position in the chain
+     * @param totalSize the total number of certificates in the chain
+     * @return a string describing the certificate type
+     */
+    private String getCertificateType(int index, int totalSize) {
+        if (totalSize == 1) {
+            return "End Entity";
+        } else if (index == 0) {
+            return "End Entity";
+        } else if (index == totalSize - 1) {
+            return "Root CA";
+        } else {
+            return "Intermediate CA";
         }
     }
 
@@ -240,11 +289,18 @@ public class ChainValidator {
     private CertChainVerifier.ValidationResult handleValidationException(
             CertPathValidatorException e, List<X509Certificate> certificates) {
 
-        String reason = e.getReason();
+        String reason = e.getReason() != null ? e.getReason().toString() : "Unknown reason";
         int index = e.getIndex();
 
         StringBuilder errorMessage = new StringBuilder();
-        errorMessage.append("Certificate validation failed: ").append(reason);
+
+        if (reason.toLowerCase().contains("expired")) {
+            errorMessage.append("Certificate chain validation failed: Certificate has expired");
+        } else if (reason.toLowerCase().contains("not yet valid")) {
+            errorMessage.append("Certificate chain validation failed: Certificate is not yet valid");
+        } else {
+            errorMessage.append("Certificate chain validation failed: ").append(reason);
+        }
 
         if (index >= 0 && certificates != null && index < certificates.size()) {
             X509Certificate failedCert = certificates.get(index);
@@ -256,6 +312,22 @@ public class ChainValidator {
                         failedCert.getIssuerX500Principal().getName());
                 errorMessage.append("\nSerial: ").append(
                         failedCert.getSerialNumber().toString(16).toUpperCase());
+                errorMessage.append("\nValid From: ").append(failedCert.getNotBefore());
+                errorMessage.append("\nValid To: ").append(failedCert.getNotAfter());
+
+                Date now = new Date();
+                Date notAfter = failedCert.getNotAfter();
+                Date notBefore = failedCert.getNotBefore();
+
+                if (notAfter != null && now.after(notAfter)) {
+                    long daysExpired = (now.getTime() - notAfter.getTime()) / (1000L * 60 * 60 * 24);
+                    errorMessage.append("\nDays Expired: ").append(daysExpired).append(" day(s)");
+                }
+
+                if (notBefore != null && now.before(notBefore)) {
+                    long daysUntilValid = (notBefore.getTime() - now.getTime()) / (1000L * 60 * 60 * 24);
+                    errorMessage.append("\nDays Until Valid: ").append(daysUntilValid).append(" day(s)");
+                }
             }
         }
 
