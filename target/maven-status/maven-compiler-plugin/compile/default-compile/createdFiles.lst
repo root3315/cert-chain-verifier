@@ -1,0 +1,5 @@
+com/certchain/ChainValidator.class
+com/certchain/CertificateLoader.class
+com/certchain/TrustStoreManager.class
+com/certchain/CertChainVerifier.class
+com/certchain/CertChainVerifier$ValidationResult.class

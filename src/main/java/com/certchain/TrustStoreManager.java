@@ -118,7 +118,8 @@ public class TrustStoreManager {
      * @return a new empty KeyStore
      * @throws KeyStoreException if the KeyStore cannot be created
      */
-    public KeyStore createEmptyKeyStore(String type) throws KeyStoreException {
+    public KeyStore createEmptyKeyStore(String type)
+            throws KeyStoreException, IOException, CertificateException, NoSuchAlgorithmException {
         if (type == null || type.isEmpty()) {
             throw new IllegalArgumentException("KeyStore type cannot be null or empty");
         }
